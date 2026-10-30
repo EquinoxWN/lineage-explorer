@@ -88,7 +88,12 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/spark-venv"
           "$RUNNER_TEMP/spark-venv/bin/pip" install -q "pyspark==4.0.5"
-          "$RUNNER_TEMP/spark-venv/bin/spark-submit" --master "local[2]" --driver-memory 1g \
+          # Without these, spark-submit looks for SPARK_HOME and runs the job with the system python3,
+          # which has no pyspark (an empty SPARK_HOME ends in "spark-class: not found", exit 127).
+          export PYSPARK_PYTHON="$RUNNER_TEMP/spark-venv/bin/python" PYSPARK_DRIVER_PYTHON="$RUNNER_TEMP/spark-venv/bin/python"
+          SPARK_HOME=$("$PYSPARK_PYTHON" -c 'import os, pyspark; print(os.path.dirname(pyspark.__file__))')
+          export SPARK_HOME
+          "$SPARK_HOME/bin/spark-submit" --master "local[2]" --driver-memory 1g \
             --conf spark.jars.ivy="$RUNNER_TEMP/ivy" \
             --packages io.openlineage:openlineage-spark_2.13:1.54.0 \
             --conf spark.extraListeners=io.openlineage.spark.agent.OpenLineageSparkListener \

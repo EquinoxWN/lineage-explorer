@@ -1,7 +1,7 @@
 """PySpark job: paid revenue per customer from the shop CSVs, written as Parquet.
 
 Lineage comes from OpenLineage's Spark listener, configured on the spark-submit command line
-(see the Makefile target spark-run and the CI workflow); this file has no lineage code at all.
+(see the `marquez` job in the CI workflow); this file has no lineage code at all.
 
 usage: spark-submit [OpenLineage --conf flags] orders_job.py <seeds dir> <output dir>
 """
