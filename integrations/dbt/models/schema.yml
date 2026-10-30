@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: Paid orders.
+    columns:
+      - name: order_id
+        description: Order key.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: Customer who placed the order.
+      - name: amount
+        description: Order amount.
+  - name: stg_customers
+    description: Customers with a readable name.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: customer_name
+      - name: country
+  - name: customer_revenue
+    description: Orders and revenue per customer.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: customer_name
+      - name: country
+      - name: orders
+      - name: revenue

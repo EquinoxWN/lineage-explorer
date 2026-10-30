@@ -1,0 +1,137 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: the workflow can read the code and nothing else.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Lint, types, unit tests (including a real dbt-ol run on DuckDB) and dependency audit.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Every action is pinned to a full commit SHA.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+      - run: make ci
+      - name: Known-vulnerability audit
+        run: make audit
+
+  # dbt, Spark, Airflow and the custom emitter all report to a real Marquez, which is then read back.
+  marquez:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MARQUEZ_URL: http://localhost:5000
+      OPENLINEAGE_URL: http://localhost:5000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Start Postgres and Marquez (images pinned by digest, memory-capped)
+        run: |
+          docker run -d --name marquez-db --network host --memory 512m \
+            -e POSTGRES_USER=marquez -e POSTGRES_PASSWORD=marquez -e POSTGRES_DB=marquez \
+            --health-cmd "pg_isready -U marquez" --health-interval 2s \
+            postgres:16.14-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+          for i in $(seq 1 60); do [ "$(docker inspect -f '{{.State.Health.Status}}' marquez-db)" = healthy ] && break; sleep 2; done
+          docker run -d --name marquez-api --network host --memory 1g \
+            -e MARQUEZ_PORT=5000 -e MARQUEZ_ADMIN_PORT=5001 -e POSTGRES_HOST=localhost -e SEARCH_ENABLED=false \
+            marquezproject/marquez:0.51.1@sha256:0721c976cff17d8b14f7949d85d6dac9c7ea37cb9fe857caa19833730fcb1a50
+          for i in $(seq 1 90); do curl -sf http://localhost:5001/healthcheck >/dev/null && exit 0; sleep 2; done
+          docker logs --tail 80 marquez-api; exit 1
+      - name: Install the Python package with dbt, and the JS client
+        run: |
+          python -m pip install -e "python[dev,dbt]"
+          cd js && npm ci
+      - name: Custom emitter (plain scripts) to Marquez
+        run: lineage-emit demo --dir "$RUNNER_TEMP/scripts" --target "$OPENLINEAGE_URL"
+      - name: Custom emitter read back through the Marquez API
+        run: cd python && python -m pytest -q -m marquez -rs
+      - name: dbt-ol seed and run to Marquez
+        env:
+          OPENLINEAGE_NAMESPACE: dbt
+          DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
+        run: |
+          export DBT_TARGET_PATH="$RUNNER_TEMP/dbt/target" DBT_LOG_PATH="$RUNNER_TEMP/dbt/logs" DBT_DUCKDB_PATH="$RUNNER_TEMP/dbt/shop.duckdb"
+          dbt-ol seed --project-dir integrations/dbt --profiles-dir integrations/dbt
+          dbt-ol run --project-dir integrations/dbt --profiles-dir integrations/dbt
+      - name: Spark job with the OpenLineage listener to Marquez
+        run: |
+          python -m venv "$RUNNER_TEMP/spark-venv"
+          "$RUNNER_TEMP/spark-venv/bin/pip" install -q "pyspark==4.0.5"
+          "$RUNNER_TEMP/spark-venv/bin/spark-submit" --master "local[2]" --driver-memory 1g \
+            --conf spark.jars.ivy="$RUNNER_TEMP/ivy" \
+            --packages io.openlineage:openlineage-spark_2.13:1.54.0 \
+            --conf spark.extraListeners=io.openlineage.spark.agent.OpenLineageSparkListener \
+            --conf spark.openlineage.transport.type=http \
+            --conf spark.openlineage.transport.url="$OPENLINEAGE_URL" \
+            --conf spark.openlineage.namespace=spark \
+            integrations/spark/orders_job.py integrations/dbt/seeds "$RUNNER_TEMP/spark-out"
+      - name: Airflow DAG with the OpenLineage provider to Marquez
+        env:
+          AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+          AIRFLOW__OPENLINEAGE__NAMESPACE: airflow
+          AIRFLOW__OPENLINEAGE__TRANSPORT: '{"type": "http", "url": "http://localhost:5000", "endpoint": "api/v1/lineage"}'
+        run: |
+          export AIRFLOW_HOME="$RUNNER_TEMP/airflow" AIRFLOW__CORE__DAGS_FOLDER="$PWD/integrations/airflow/dags"
+          export SHOP_SEEDS="$PWD/integrations/dbt/seeds" SHOP_WORK="$RUNNER_TEMP/airflow-work"
+          python -m venv "$RUNNER_TEMP/airflow-venv"
+          "$RUNNER_TEMP/airflow-venv/bin/pip" install -q "apache-airflow==3.3.2" apache-airflow-providers-openlineage apache-airflow-providers-standard \
+            --constraint https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt
+          "$RUNNER_TEMP/airflow-venv/bin/airflow" db migrate
+          "$RUNNER_TEMP/airflow-venv/bin/airflow" dags test orders_pipeline 2026-10-01
+      - name: Marquez stores every expected job run and dataset
+        run: |
+          cd js
+          node src/cli.ts check --wait 120 \
+            --job scripts::shop_pipeline --job scripts::clean_orders --job scripts::customer_revenue \
+            --job dbt::stg_orders --job dbt::stg_customers --job dbt::customer_revenue \
+            --job spark::orders_job \
+            --job airflow::orders_pipeline.extract_paid --job airflow::orders_pipeline.total_revenue \
+            --dataset marts/customer_revenue.csv --dataset shop.main.customer_revenue --dataset spark-out/customer_revenue \
+            | tee "$RUNNER_TEMP/check.txt"
+          node src/cli.ts summary | tee -a "$RUNNER_TEMP/check.txt"
+          node src/cli.ts lineage "job:dbt:$(node src/cli.ts jobs dbt | cut -f1 | grep customer_revenue | head -1)" | tee -a "$RUNNER_TEMP/check.txt"
+          { echo '```'; cat "$RUNNER_TEMP/check.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Marquez end-to-end::$(grep -c '^ok' "$RUNNER_TEMP/check.txt") expectations met; $(grep '^CHECK' "$RUNNER_TEMP/check.txt")"
+      - name: Airflow task datasets (reported, not required)
+        continue-on-error: true
+        run: |
+          cd js
+          node src/cli.ts check --dataset paid_orders.csv --dataset revenue_total.txt && r=found || r=missing
+          echo "::notice title=Airflow inlets and outlets::datasets $r in Marquez"
+      - name: Marquez logs on failure
+        if: failure()
+        run: docker logs --tail 60 marquez-api 2>&1 | python3 -c "import sys; print('::error title=marquez-api (last lines)::' + sys.stdin.read().replace('%', '%25').replace('\r', '').replace('\n', '%0A'))"
+      - name: Stop containers
+        if: always()
+        run: docker rm -f marquez-api marquez-db

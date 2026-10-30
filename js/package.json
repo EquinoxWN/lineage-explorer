@@ -1,0 +1,22 @@
+{
+  "name": "lineage-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed client and command-line reader for the Marquez lineage API (datasets, jobs, runs, lineage graph).",
+  "type": "module",
+  "bin": {
+    "lineage-explorer": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\"",
+    "lint": "tsc -p tsconfig.json",
+    "cli": "node src/cli.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}

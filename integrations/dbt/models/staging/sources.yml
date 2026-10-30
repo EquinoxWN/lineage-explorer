@@ -1,0 +1,10 @@
+version: 2
+
+# The seeds are loaded into main.raw_*; reading them as sources (not ref) makes dbt-ol report
+# them as run inputs (see docs/adr/0003-raw-tables-as-dbt-sources.md).
+sources:
+  - name: raw
+    schema: main
+    tables:
+      - name: raw_orders
+      - name: raw_customers

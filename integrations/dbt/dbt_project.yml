@@ -1,0 +1,18 @@
+# dbt project whose runs are reported to OpenLineage by dbt-ol (see the README "Run it" section).
+name: shop
+version: "1.0.0"
+config-version: 2
+profile: shop
+
+flags:
+  send_anonymous_usage_stats: false
+
+seed-paths: ["seeds"]
+model-paths: ["models"]
+
+models:
+  shop:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lineage-explorer"
+version = "0.1.0"
+description = "OpenLineage emitters for dbt, Spark, Airflow and plain Python scripts, stored and served by Marquez."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "openlineage-python==1.54.0",
+    "jsonschema>=4.23,<5",
+    # Lets jsonschema check the date-time format of eventTime.
+    "rfc3339-validator>=0.1.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-timeout>=2.3", "ruff>=0.6", "mypy>=1.11", "pip-audit>=2.7", "types-jsonschema"]
+# dbt with the DuckDB adapter and OpenLineage's dbt-ol wrapper (runs locally and in CI).
+dbt = ["dbt-core>=1.10,<2", "dbt-duckdb>=1.9,<2", "openlineage-dbt==1.54.0"]
+
+[project.scripts]
+lineage-emit = "lineage_explorer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lineage_explorer = ["schemas/*.json", "schemas/NOTICE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 300
+markers = [
+    "dbt: runs dbt-ol against DuckDB (needs the dbt extra)",
+    "marquez: needs a Marquez server at MARQUEZ_URL (CI service)",
+]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = [".tmp", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "SIM", "RUF", "N", "C4", "PT", "RET", "PIE", "PERF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603", "S310"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]

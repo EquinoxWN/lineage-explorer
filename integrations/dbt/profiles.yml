@@ -1,0 +1,8 @@
+# DuckDB file warehouse; DBT_DUCKDB_PATH points it inside the repo's git-ignored .tmp/ folder.
+shop:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'shop.duckdb') }}"
+      threads: 1

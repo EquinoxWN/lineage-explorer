@@ -1,0 +1,5 @@
+The JSON Schema files in this folder are copied unchanged from the OpenLineage project,
+tag 1.54.0, folder spec/ (https://github.com/OpenLineage/OpenLineage/tree/1.54.0/spec).
+
+Copyright 2018-2026 contributors to the OpenLineage project.
+Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
