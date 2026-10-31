@@ -1,9 +1,9 @@
 # lineage-explorer
 
 [![ci](https://github.com/EquinoxWN/lineage-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/EquinoxWN/lineage-explorer/actions/workflows/ci.yml)
-![status](https://img.shields.io/badge/status-M1%20built%2C%20Marquez%20CI%20run%20pending-yellow)
+![status](https://img.shields.io/badge/status-M1%20done%2C%20M2%20in%20progress-yellow)
 
-> dbt and plain Python scripts report every run as OpenLineage events, checked against the official schemas, so the data behind "what breaks if I drop this column?" is collected and checked. Spark, Airflow and the Marquez store are wired up in a CI job whose first run is pending.
+> dbt and plain Python scripts report every run as OpenLineage events, checked against the official schemas, so the data behind "what breaks if I drop this column?" is collected and checked. In CI, Spark and Airflow runs report into Marquez too, and a check reads them back.
 
 Part of my **Data Engineering** list · TypeScript · Python
 
@@ -123,8 +123,8 @@ Full commands, numbers and the DMAIC record: [docs/results/m1.md](docs/results/m
 
 **M1** (≈8 h)
 - [x] Write `docs/rfc/0001-design.md`: problem, goals, non-goals, chosen design
-- [ ] dbt, Spark and Airflow emit OpenLineage events on every run; a small custom emitter covers plain scripts. dbt and scripts run and are validated locally; Spark and Airflow: CI job written, first CI run pending.
-- [ ] Marquez stores datasets, jobs and runs, and serves them through its API. Typed client and `check` gate built and unit-tested; the Marquez CI job is written, first CI run pending.
+- [x] dbt, Spark and Airflow emit OpenLineage events on every run; a small custom emitter covers plain scripts. dbt and scripts run and are validated locally; Spark and Airflow run in the CI `marquez` job.
+- [x] Marquez stores datasets, jobs and runs, and serves them through its API. In CI the typed client's `check` found all 12 expectations met: 9 jobs completed and 3 datasets stored.
 
 **M2** (≈8 h)
 - [ ] The React Flow UI draws the graph, collapses large subgraphs and traces a single column upstream or downstream.
