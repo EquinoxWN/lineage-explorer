@@ -13,7 +13,7 @@ A plain-script pipeline and a real `dbt-ol` run on DuckDB, with their events cap
 
 ![lineage-emit demo, dbt-ol run and lineage-emit validate](docs/proof/events.jpg)
 
-51 tests pass locally (35 Python, 16 TypeScript; one Marquez test runs in CI only), and both dependency audits are clean:
+52 tests pass locally (35 Python, 17 TypeScript; one Marquez test runs in CI only), and both dependency audits are clean:
 
 ![pytest, node --test, pip-audit and npm audit](docs/proof/tests.jpg)
 
@@ -76,7 +76,7 @@ Two parts, each in its own folder: [`python/`](python) (the emitter, the validat
 python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
 make setup        # pip install -e "python[dev,dbt]"; npm ci in js/
 make lint         # ruff, ruff format, mypy --strict, tsc --strict
-make test         # 35 Python tests (incl. a real dbt-ol run) + 16 TypeScript tests
+make test         # 35 Python tests (incl. a real dbt-ol run) + 17 TypeScript tests
 make audit        # pip-audit and npm audit
 make demo         # two CSV scripts -> events in .tmp/events/scripts.jsonl, then validated
 make dbt-events   # dbt-ol seed + run on DuckDB -> .tmp/events/dbt.jsonl, then validated
@@ -98,7 +98,7 @@ Spark and Airflow use only configuration: `spark-submit --packages io.openlineag
 
 ## Tests and results
 
-Full commands, numbers and the DMAIC record: [docs/results/m1.md](docs/results/m1.md).
+Full commands, numbers and the DMAIC record: [docs/results/m1.md](docs/results/m1.md). Quality check of the 10 engineering rules, with a mutation test of the core functions: [docs/quality/2026-11-01.md](docs/quality/2026-11-01.md).
 
 | Test file | Tests | What it proves |
 |---|---|---|
@@ -109,11 +109,11 @@ Full commands, numbers and the DMAIC record: [docs/results/m1.md](docs/results/m
 | `python/tests/test_marquez.py` | 1 (CI) | Custom emitter to a real Marquez; job, run, inputs, outputs, fields and lineage read back through the API |
 | `js/test/marquez.test.ts` | 7 | Typed parsing, URL and encoding safety, paging, size, time and item limits, error statuses |
 | `js/test/graph.test.ts` | 4 | Upstream and downstream walks, one-sided edges, cycles; 25 random DAGs match shortest-path hop counts |
-| `js/test/cli.test.ts` | 5 | List, summary and lineage output; `check` pass, miss and `--wait`; exit codes 2 for usage and 1 for server errors |
+| `js/test/cli.test.ts` | 6 | List, summary and lineage output; `check` pass, miss, `--wait` and its deadline on a monotonic clock; exit codes 2 for usage and 1 for server errors |
 
 | Check | Result |
 |---|---|
-| Tests | **51 passed** locally (Python 35, TypeScript 16), 1 skipped (needs Marquez, runs in CI), 0 failed |
+| Tests | **52 passed** locally (Python 35, TypeScript 17), 1 skipped (needs Marquez, runs in CI), 0 failed |
 | Captured events | scripts 6 and dbt 10 events, **0 schema problems**, 19 output columns with column lineage |
 | Lint / types | ruff, ruff format, `mypy --strict`, `tsc --strict`: clean |
 | Audit | `pip-audit`: no known vulnerabilities; `npm audit`: 0 vulnerabilities |

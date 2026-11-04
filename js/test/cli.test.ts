@@ -87,6 +87,28 @@ test("check --wait polls until a run lands", async () => {
   }
 });
 
+test("check --wait gives up at the deadline, measured on the injected monotonic clock", async () => {
+  let calls = 0;
+  const fake = await startFake({
+    "/api/v1/namespaces/scripts/jobs": (_u, _q, res) => {
+      calls++;
+      res.end(JSON.stringify({ totalCount: 1, jobs: [job("scripts", "clean_orders", [], [], "RUNNING")] }));
+    },
+  });
+  let t = 0;
+  const out: string[] = [];
+  const io = { out: (l: string) => out.push(l), err: () => undefined, env: {}, now: () => t, sleep: async (ms: number) => { t += ms; } };
+  try {
+    // Polls at 0, 2 and 4 s; the 4 s poll reaches the 4 s deadline and is the last one.
+    const code = await run(["--url", fake.url, "check", "--job", "scripts::clean_orders", "--wait", "4"], io);
+    assert.equal(code, 1);
+    assert.equal(calls, 3);
+    assert.equal(out.at(-1), "CHECK FAILED");
+  } finally {
+    await fake.close();
+  }
+});
+
 test("bad input exits 2 with usage; an unreachable server exits 1", async () => {
   for (const argv of [[], ["frobnicate"], ["datasets"], ["check"], ["check", "--job", "nonamespace"], ["lineage", "orders"], ["lineage", "dataset:a:b", "--depth", "500"], ["--url", "file:///x", "namespaces"], ["--bogus"]]) {
     const r = await cli(argv);
