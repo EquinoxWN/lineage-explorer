@@ -11,6 +11,7 @@ export interface Io {
   err: (line: string) => void;
   env: Record<string, string | undefined>;
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number; // monotonic milliseconds; defaults to performance.now
 }
 
 const USAGE = `usage: lineage-explorer [--url URL] <command>
@@ -160,11 +161,12 @@ export async function run(argv: string[], io: Io): Promise<number> {
         const datasets = v.dataset ?? [];
         if (jobs.length + datasets.length === 0) throw new UsageError("check needs at least one --job or --dataset");
         jobs.forEach(splitJobSpec);
-        const deadline = Date.now() + intOpt(v.wait, "wait", 0, 0, 600) * 1000;
+        const now = io.now ?? (() => performance.now());
+        const deadline = now() + intOpt(v.wait, "wait", 0, 0, 600) * 1000;
         const sleep = io.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
         for (;;) {
           const res = await checkOnce(client, jobs, datasets);
-          if (res.ok || Date.now() >= deadline) {
+          if (res.ok || now() >= deadline) {
             res.lines.forEach((l) => io.out(l));
             io.out(res.ok ? `CHECK OK: ${jobs.length} jobs, ${datasets.length} datasets` : "CHECK FAILED");
             return res.ok ? 0 : 1;
